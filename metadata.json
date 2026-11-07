@@ -1,0 +1,6 @@
+{
+  "name": "WanderSpace",
+  "description": "A full-stack travel stay listing and review platform built with React, Express, and SQL.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
