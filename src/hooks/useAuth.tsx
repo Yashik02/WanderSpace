@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { isSupabaseConfigured, supabase, authEmail } from "../lib/supabase";
+import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import { apiFetch } from "../lib/api";
 import { User } from "../types";
 import { useNotifications } from "./useNotifications";
 import { useLanguage } from "./useLanguage";
@@ -8,7 +9,7 @@ interface AuthContextValue {
     user: User | null;
     loading: boolean;
     login: (username: string, password: string) => Promise<void>;
-    register: (username: string, password: string) => Promise<void>;
+    register: (email: string, username: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
 }
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -71,8 +72,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         };
     }, []);
     const login = async (username: string, password: string) => {
+        const resolveResponse = await apiFetch("/api/auth/resolve-username", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username }),
+        });
+        const resolved = await resolveResponse.json();
+        if (!resolveResponse.ok) {
+            const error = new Error(
+                resolved.error || "Invalid username or password.",
+            );
+            notify(error.message, "error");
+            throw error;
+        }
+
         const { error } = await supabase.auth.signInWithPassword({
-            email: authEmail(username),
+            email: resolved.email,
             password,
         });
         if (error) {
@@ -81,18 +96,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
         notify(t("loggedIn"), "success");
     };
-    const register = async (username: string, password: string) => {
-        const normalizedUsername = username.trim();
-        const { error } = await supabase.auth.signUp({
-            email: authEmail(normalizedUsername),
+    const register = async (
+        email: string,
+        username: string,
+        password: string,
+    ) => {
+        const trimmedEmail = email.trim();
+        const trimmedUsername = username.trim();
+        const registerResponse = await apiFetch("/api/auth/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                email: trimmedEmail,
+                username: trimmedUsername,
+                password,
+            }),
+        });
+        const registerResult = await registerResponse.json();
+        if (!registerResponse.ok) {
+            const error = new Error(
+                registerResult.error || "Unable to create your account.",
+            );
+            notify(error.message, "error");
+            throw error;
+        }
+
+        const { error } = await supabase.auth.signInWithPassword({
+            email: trimmedEmail,
             password,
-            options: { data: { username: normalizedUsername } },
         });
         if (error) {
             notify(error.message || t("authFailed"), "error");
             throw error;
         }
-        notify(t("register"), "success");
+        notify(t("registrationSuccess"), "success");
     };
     const logout = async () => {
         const { error } = await supabase.auth.signOut();

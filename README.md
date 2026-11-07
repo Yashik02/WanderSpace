@@ -163,10 +163,16 @@ Authentication is handled directly by Supabase Auth in the browser. The server
 does not create sessions; protected API requests send the Supabase access token
 as a bearer token, which the server verifies before applying ownership checks.
 Registration requires a username of at least 3 characters and a password of at
-least 8 characters.
-This project uses usernames mapped to an internal Supabase email address, so
-disable Supabase email confirmation unless the authentication UI is changed to
-collect real email addresses.
+least 8 characters, plus a valid email address. Supabase enforces email
+uniqueness. Usernames are stored as entered and must be unique
+case-sensitively (`abc` and `aBc` are different usernames). Email confirmation
+is disabled for this project, so a successful registration can sign in
+immediately; the application signs out that session and asks the user to log in
+normally.
+
+Login accepts username and password. The backend resolves the exact username
+to its Supabase account email without exposing profile data through the
+frontend.
 
 ### Listings and reviews
 
@@ -179,6 +185,8 @@ collect real email addresses.
 | `DELETE` | `/api/listings/:id`         | Owner         | Delete a stay and its reviews |
 | `POST`   | `/api/listings/:id/reviews` | Authenticated | Add a review                  |
 | `DELETE` | `/api/reviews/:id`          | Authenticated | Delete a review               |
+| `POST`   | `/api/auth/check-username` | Public        | Check username availability   |
+| `POST`   | `/api/auth/resolve-username` | Public        | Resolve username for login    |
 | `GET`    | `/api/health`               | Public        | Check server health           |
 
 `GET /api/listings` accepts these optional query parameters:
@@ -191,6 +199,34 @@ Example:
 
 ```bash
 curl "http://localhost:3000/api/listings?search=beach&sort=rating"
+```
+
+### One-time cleanup for an existing Supabase project
+
+If this is a showcase deployment and you do not need to preserve current users
+or sample data, run this in the Supabase SQL Editor:
+
+```sql
+TRUNCATE TABLE public.reviews, public.listings, public.profiles CASCADE;
+DELETE FROM auth.users;
+```
+
+Then run `seeds.sql` if sample listings are desired. This removes all accounts,
+listings, reviews, and profiles, so export anything important first.
+
+If you need to preserve data, remove exact duplicate usernames before applying
+the schema:
+
+```sql
+WITH duplicates AS (
+  SELECT id, ROW_NUMBER() OVER (
+    PARTITION BY username
+    ORDER BY created_at, id
+  ) AS row_number
+  FROM public.profiles
+)
+DELETE FROM public.profiles
+WHERE id IN (SELECT id FROM duplicates WHERE row_number > 1);
 ```
 
 ## Database Design

@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { initDatabase, pool } from "./server/db";
 import listingsRouter from "./server/routes/listings";
 import reviewsRouter from "./server/routes/reviews";
+import authRouter from "./server/routes/auth";
 
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -63,6 +64,7 @@ async function startServer() {
     // API Routes
     app.use("/api/listings", listingsRouter);
     app.use("/api", reviewsRouter);
+    app.use("/api", authRouter);
 
     // Health check endpoint
     app.get("/api/health", (req, res) => {

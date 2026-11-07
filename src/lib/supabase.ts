@@ -9,7 +9,3 @@ export const supabase = createClient(
     supabaseUrl || "https://placeholder.supabase.co",
     supabaseAnonKey || "placeholder-anon-key",
 );
-
-export function authEmail(username: string): string {
-    return `${username.trim().toLowerCase()}@users.wanderspace.local`;
-}

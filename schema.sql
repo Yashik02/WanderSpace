@@ -5,6 +5,11 @@ CREATE TABLE IF NOT EXISTS profiles (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DROP INDEX IF EXISTS public.profiles_username_lower_idx;
+
+CREATE UNIQUE INDEX IF NOT EXISTS profiles_username_exact_idx
+    ON public.profiles (username);
+
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -14,7 +19,10 @@ BEGIN
     INSERT INTO public.profiles (id, username)
     VALUES (
         NEW.id,
-        COALESCE(NEW.raw_user_meta_data ->> 'username', split_part(NEW.email, '@', 1))
+        TRIM(COALESCE(
+            NEW.raw_user_meta_data ->> 'username',
+            split_part(NEW.email, '@', 1)
+        ))
     )
     ON CONFLICT (id) DO NOTHING;
     RETURN NEW;
@@ -35,7 +43,7 @@ CREATE TABLE IF NOT EXISTS listings (
     location VARCHAR(255) NOT NULL,
     country VARCHAR(255) NOT NULL,
     category VARCHAR(100) DEFAULT 'Trending',
-    user_id UUID NULL REFERENCES auth.users(id) ON DELETE SET NULL,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -43,7 +51,7 @@ CREATE TABLE IF NOT EXISTS reviews (
     id UUID PRIMARY KEY,
     listing_id UUID NOT NULL,
     author VARCHAR(100) DEFAULT 'Anonymous Guest',
-    user_id UUID NULL REFERENCES auth.users(id) ON DELETE SET NULL,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
     rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
     comment TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -59,3 +67,23 @@ CREATE TABLE IF NOT EXISTS reviews (
 -- FROM listings l
 -- LEFT JOIN reviews r ON l.id = r.listing_id
 -- GROUP BY l.id;
+
+-- Existing database migration:
+-- 1. Run the account and listing statements in seeds.sql.
+-- 2. Then enforce ownership on an existing listings table:
+-- UPDATE public.listings
+-- SET user_id = '00000000-0000-0000-0000-000000000001'
+-- WHERE user_id IS NULL;
+-- ALTER TABLE public.listings ALTER COLUMN user_id SET NOT NULL;
+-- ALTER TABLE public.listings DROP CONSTRAINT IF EXISTS listings_user_id_fkey;
+-- ALTER TABLE public.listings
+--     ADD CONSTRAINT listings_user_id_fkey
+--     FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE RESTRICT;
+-- UPDATE public.reviews
+-- SET user_id = '00000000-0000-0000-0000-000000000001'
+-- WHERE user_id IS NULL;
+-- ALTER TABLE public.reviews ALTER COLUMN user_id SET NOT NULL;
+-- ALTER TABLE public.reviews DROP CONSTRAINT IF EXISTS reviews_user_id_fkey;
+-- ALTER TABLE public.reviews
+--     ADD CONSTRAINT reviews_user_id_fkey
+--     FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE RESTRICT;

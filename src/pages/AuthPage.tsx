@@ -5,6 +5,7 @@ import { useLanguage } from "../hooks/useLanguage";
 export const AuthPage: React.FC = () => {
     const [params] = useSearchParams();
     const [register, setRegister] = useState(params.get("mode") === "register");
+    const [email, setEmail] = useState("");
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
@@ -15,7 +16,7 @@ export const AuthPage: React.FC = () => {
         e.preventDefault();
         setError("");
         try {
-            if (register) await signUp(username, password);
+            if (register) await signUp(email, username, password);
             else await login(username, password);
             navigate("/");
         } catch (e: any) {
@@ -35,6 +36,18 @@ export const AuthPage: React.FC = () => {
             </p>
 
             <form onSubmit={submit}>
+                {register && (
+                    <div className="form-group">
+                        <label className="form-label">{t("email")}</label>
+                        <input
+                            className="form-control"
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
+                        />
+                    </div>
+                )}
                 <div className="form-group">
                     <label className="form-label">{t("username")}</label>
                     <input
