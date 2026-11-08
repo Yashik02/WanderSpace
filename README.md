@@ -1,5 +1,5 @@
 # WanderSpace
-**🚀 Live Demo:** [Visit WanderSpace here](https://wander-space.vercel.app/)
+**🚀 Live Demo:** [Visit WanderSpace here](https://wanderspace.onrender.com/)
 
 WanderSpace is a full-stack vacation-rental marketplace built for a 3rd
 Semester B.Tech CSE academic project. Travelers can browse stays, search
