@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:match*",
+      "destination": "https://wanderspace.onrender.com/api/:match*"
+    }
+  ]
+}

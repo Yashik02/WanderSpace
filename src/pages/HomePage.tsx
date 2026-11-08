@@ -11,7 +11,6 @@ import { CategoryFilter } from "../components/CategoryFilter";
 import { useLanguage } from "../hooks/useLanguage";
 import { useSearch } from "../hooks/useSearch";
 import { useWishlist } from "../hooks/useWishlist";
-import { apiUrl } from "../lib/api";
 import { Listing } from "../types";
 
 export const HomePage: React.FC = () => {
@@ -47,13 +46,23 @@ export const HomePage: React.FC = () => {
             queryParams.append("sort", sortBy);
         }
 
+        let activeController: AbortController | undefined;
+
         const fetchStays = async (currentRetryCount = 0): Promise<void> => {
+            const controller = new AbortController();
+            activeController = controller;
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+
             try {
+                console.log(
+                    `[Attempt ${currentRetryCount + 1}] Fetching listings...`,
+                );
                 const response = await fetch(
-                    apiUrl(`/api/listings?${queryParams.toString()}`),
+                    `/api/listings?${queryParams.toString()}`,
+                    { signal: controller.signal },
                 );
                 if (!response.ok) {
-                    throw new Error("Backend not awake");
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
                 const data = await response.json();
@@ -65,22 +74,38 @@ export const HomePage: React.FC = () => {
                 setListings(fetchedListings);
                 reconcileWishlist(fetchedListings.map((listing) => listing.id));
                 setLoading(false);
+                console.log("Successfully loaded listings!");
             } catch (err) {
                 if (!isMounted) {
                     return;
                 }
 
-                if (currentRetryCount < 6) {
+                const error =
+                    err instanceof Error ? err : new Error(String(err));
+                if (error.name === "AbortError") {
+                    console.error(
+                        `[Attempt ${currentRetryCount + 1}] Render took too long to answer. Timeout triggered.`,
+                    );
+                } else {
+                    console.error(
+                        `[Attempt ${currentRetryCount + 1}] Error fetching listings:`,
+                        error.message,
+                    );
+                }
+
+                if (currentRetryCount < 8) {
                     setRetryCount(currentRetryCount + 1);
                     retryTimeout = setTimeout(
                         () => void fetchStays(currentRetryCount + 1),
-                        10000,
+                        5000,
                     );
                 } else {
                     console.error("Backend failed to wake up.", err);
                     setError("Could not connect to database or fetch listings.");
                     setLoading(false);
                 }
+            } finally {
+                clearTimeout(timeoutId);
             }
         };
 
@@ -88,6 +113,7 @@ export const HomePage: React.FC = () => {
 
         return () => {
             isMounted = false;
+            activeController?.abort();
             if (retryTimeout) {
                 clearTimeout(retryTimeout);
             }
