@@ -23,11 +23,14 @@ export const HomePage: React.FC = () => {
     const [selectedCategory, setSelectedCategory] = useState<string>("All");
     const [sortBy, setSortBy] = useState<string>("newest");
     const [loading, setLoading] = useState<boolean>(true);
+    const [retryCount, setRetryCount] = useState<number>(0);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         let isMounted = true;
+        let retryTimeout: ReturnType<typeof setTimeout> | undefined;
         setLoading(true);
+        setRetryCount(0);
         setError(null);
 
         const queryParams = new URLSearchParams();
@@ -44,14 +47,16 @@ export const HomePage: React.FC = () => {
             queryParams.append("sort", sortBy);
         }
 
-        fetch(apiUrl(`/api/listings?${queryParams.toString()}`))
-            .then((response) => {
+        const fetchStays = async (currentRetryCount = 0): Promise<void> => {
+            try {
+                const response = await fetch(
+                    apiUrl(`/api/listings?${queryParams.toString()}`),
+                );
                 if (!response.ok) {
-                    throw new Error(`HTTP error ${response.status}`);
+                    throw new Error("Backend not awake");
                 }
-                return response.json();
-            })
-            .then((data) => {
+
+                const data = await response.json();
                 if (!isMounted) {
                     return;
                 }
@@ -60,19 +65,32 @@ export const HomePage: React.FC = () => {
                 setListings(fetchedListings);
                 reconcileWishlist(fetchedListings.map((listing) => listing.id));
                 setLoading(false);
-            })
-            .catch((err) => {
+            } catch (err) {
                 if (!isMounted) {
                     return;
                 }
 
-                console.error("Failed to load listings:", err);
-                setError("Could not connect to database or fetch listings.");
-                setLoading(false);
-            });
+                if (currentRetryCount < 6) {
+                    setRetryCount(currentRetryCount + 1);
+                    retryTimeout = setTimeout(
+                        () => void fetchStays(currentRetryCount + 1),
+                        10000,
+                    );
+                } else {
+                    console.error("Backend failed to wake up.", err);
+                    setError("Could not connect to database or fetch listings.");
+                    setLoading(false);
+                }
+            }
+        };
+
+        void fetchStays();
 
         return () => {
             isMounted = false;
+            if (retryTimeout) {
+                clearTimeout(retryTimeout);
+            }
         };
     }, [reconcileWishlist, searchQuery, selectedCategory, sortBy]);
 
@@ -107,7 +125,9 @@ export const HomePage: React.FC = () => {
                     </h1>
                     <p style={{ color: "#666", fontSize: "0.9rem" }}>
                         {loading
-                            ? t("findingStays")
+                            ? retryCount > 0
+                                ? "Spinning up backend servers (this takes about 60 seconds)..."
+                                : t("findingStays")
                             : `${t("foundProperties")}: ${listings.length}`}
                         {searchQuery && ` matching "${searchQuery}"`}
                     </p>
@@ -161,7 +181,11 @@ export const HomePage: React.FC = () => {
                         size={32}
                         style={{ margin: "0 auto 1rem", color: "#fe424d" }}
                     />
-                    <p>{t("queryingDatabase")}</p>
+                    <p>
+                        {retryCount > 0
+                            ? "Spinning up backend servers (this takes about 60 seconds)..."
+                            : t("queryingDatabase")}
+                    </p>
                 </div>
             )}
 
